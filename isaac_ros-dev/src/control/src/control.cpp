@@ -30,14 +30,19 @@ class ControlNode : public rclcpp::Node {
         this->declare_parameter("encoder_topic", "encoders");
         this->declare_parameter("path_planning_topic", "cmd_vel");
 
-        // serial ports
-        this->declare_parameter("motor_port", "/dev/ttyACM0");
-        this->declare_parameter("arduino_port", "/dev/ttyACM2");
+        // serial ports test
+        this->declare_parameter(
+            "motor_port",
+            "/dev/serial/by-id/usb-RoboteQ_RoboteQ_FBLG2360T_HABJAA5QR0E5NDEg_207A34554147-if00");
+
+        this->declare_parameter(
+            "arduino_port",
+            "/dev/serial/by-id/usb-Arduino__www.arduino.cc__0043_8583030363935190F141-if00");
+
         this->declare_parameter("estop_port", "/dev/ttyTHS1");
 
         configure_server = this->create_service<autonav_interfaces::srv::ConfigureControl>
              ("configure_control", std::bind(&ControlNode::configure, this, std::placeholders::_1, std::placeholders::_2));
-
 
     }
 
@@ -157,12 +162,12 @@ class ControlNode : public rclcpp::Node {
                 motors.move(command.right_motor_speed * motors.getSpeed(), command.left_motor_speed * motors.getSpeed());
             }
             else if(command.cmd == Xbox::SPEED_DOWN){
-                motors.setSpeed(motors.getSpeed() - 1);
+                motors.setSpeed(motors.getSpeed() - 5);
                 RCLCPP_INFO(this->get_logger(), "speed down. new speed: %d", motors.getSpeed());
 
             }
             else if(command.cmd == Xbox::SPEED_UP){
-                motors.setSpeed(motors.getSpeed() + 1);
+                motors.setSpeed(motors.getSpeed() + 5);
                 RCLCPP_INFO(this->get_logger(), "speed up! new speed: %d", motors.getSpeed());
             }
             else if(command.cmd == Xbox::STOP){
@@ -230,7 +235,7 @@ class ControlNode : public rclcpp::Node {
 
 
         // configure serial
-        std::string motor_port = this->get_parameter("motor_port").as_string();
+        std::string motor_port  = this->get_parameter("motor_port").as_string();
         std::string arduino_port = this->get_parameter("arduino_port").as_string();
         std::string estop_port = this->get_parameter("estop_port").as_string();
 
@@ -270,15 +275,24 @@ class ControlNode : public rclcpp::Node {
         // ESTOP CALLBACK
 	
         
+        // ----- HARD GUARD FOR ENCODER PUBLISHER -----
+        auto existing_pubs = this->get_publishers_info_by_topic(encoder_topic, false);
 
+        if (!existing_pubs.empty()) {
+            RCLCPP_FATAL(
+                this->get_logger(),
+                "Another node already publishes %s. Not creating encoder publisher in this ControlNode.",
+                encoder_topic.c_str());
+            // DO NOT create encodersPub or encoder_timer_ here
+        } else {
+            // NAVIGATION ENCODER PUB
+            encodersPub = this->create_publisher<autonav_interfaces::msg::Encoders>(encoder_topic, 10);
 
-        //NAVIGATION ENCODER PUB
-        encodersPub = this->create_publisher<autonav_interfaces::msg::Encoders>(encoder_topic, 10);
-
-        encoder_timer_ = this->create_wall_timer(
-            std::chrono::milliseconds(30),
-            std::bind(&ControlNode::publish_encoder_data, this)
-        );
+            encoder_timer_ = this->create_wall_timer(
+                std::chrono::milliseconds(30),
+                std::bind(&ControlNode::publish_encoder_data, this));
+        }
+        // ----- END HARD GUARD -----
 
        /* joy_timer_ = this->create_wall_timer(
             std::chrono::milliseconds(20),
@@ -291,10 +305,7 @@ class ControlNode : public rclcpp::Node {
 
 
         response->ret = 0;
-
-
     }
-
 };
 
 

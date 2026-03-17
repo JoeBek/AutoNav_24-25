@@ -2,98 +2,148 @@
 
 set -e # makes script exit on command failure
 
-# set params
-
+# PARAMETERS
 IMAGE_TAG="dev:koopa-kingdom"
 CONTAINER_NAME="koopa-kingdom"
-WORKDIR="$HOME/AutoNav/"
+HOST_WORKDIR="$HOME/AutoNav_25-26"
+CONTAINER_WORKDIR="/autonav"
 ENTRYPOINT="/usr/local/bin/scripts/entrypoint.sh"
 SCRIPT_DIR="$(dirname ${BASH_SOURCE[0]})"
 
+# DETECT PLATFORM
+PLATFORM=$(uname -m)
 
+# USERNAME
+USERNAME="${USERNAME:-admin}"
 
 DOCKER_ARGS=()
 
-# networking
-#DOCKER_ARGS+=("--network host") # host network stack
-#DOCKER_ARGS+=("--ipc=host") # shares IPC namespace
-DOCKER_ARGS+=("-e ROS_DOMAIN_ID")
-DOCKER_ARGS+=("-e USER")
-DOCKER_ARGS+=("-e HOST_USER_UID=`id -u`")
-DOCKER_ARGS+=("-e HOST_USER_GID=`id -g`")
-DOCKER_ARGS+=("-e WORKDIR=$WORKDIR")
-DOCKER_ARGS+=("-v /var/run/dbus:/var/run/dbus")
-DOCKER_ARGS+=("-v /sys/class/bluetooth:/sys/class/bluetooth")
+# ENVIRONMENT VARIABLES
+# ENVIRONMENT VARIABLES
+DOCKER_ARGS+=("-e" "ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}")
+DOCKER_ARGS+=("-e" "USER=${USERNAME}")
+DOCKER_ARGS+=("-e" "USERNAME=${USERNAME}")
+DOCKER_ARGS+=("-e" "HOST_USER_UID=$(id -u)")
+DOCKER_ARGS+=("-e" "HOST_USER_GID=$(id -g)")
+DOCKER_ARGS+=("-e" "WORKDIR=${CONTAINER_WORKDIR}")
+
+# BLUETOOTH AND DBUS
+DOCKER_ARGS+=("-v" "/run/dbus:/run/dbus")
+DOCKER_ARGS+=("-v" "/dev/input:/dev/input")
+DOCKER_ARGS+=("-v" "/run/udev:/run/udev:ro")
+DOCKER_ARGS+=("--network=host")
+
+# DISPLAY FORWARDING
+DOCKER_ARGS+=("-v" "/tmp/.X11-unix:/tmp/.X11-unix")
+DOCKER_ARGS+=("-v" "$HOME/.Xauthority:/home/${USERNAME}/.Xauthority:rw")
+DOCKER_ARGS+=("-e" "DISPLAY")
+
+# SSH AGENT
+if [[ -n $SSH_AUTH_SOCK ]]; then
+    DOCKER_ARGS+=("-v" "$SSH_AUTH_SOCK:/ssh-agent")
+    DOCKER_ARGS+=("-e" "SSH_AUTH_SOCK=/ssh-agent")
+fi
+
+# JETSON SPECIFIC
+if [[ $PLATFORM == "aarch64" ]]; then
+    echo "Detected Jetson platform (aarch64)"
+    DOCKER_ARGS+=("-v" "/usr/bin/tegrastats:/usr/bin/tegrastats")
+    DOCKER_ARGS+=("-v" "/tmp/:/tmp/")
+    DOCKER_ARGS+=("--pid=host")
+    
+    # jtop support
+    if [[ $(getent group jtop) ]]; then
+        DOCKER_ARGS+=("-v" "/run/jtop.sock:/run/jtop.sock:ro")
+    fi
+fi
+
+# SERIAL / USB / CAMERA DEVICES
+# USB
+DOCKER_ARGS+=("--device=/dev/arduino_uno:/dev/arduino_uno")
+DOCKER_ARGS+=("--device=/dev/roboteq:/dev/roboteq")
+
+DOCKER_ARGS+=("-v" "/dev/serial/by-id:/dev/serial/by-id:ro")
+
+for link in /dev/serial/by-id/usb-Arduino* /dev/serial/by-id/usb-RoboteQ*; do
+  if [[ -e "$link" ]]; then
+    real_dev="$(readlink -f "$link")"
+    DOCKER_ARGS+=("--device=${real_dev}:${real_dev}")
+  fi
+done
+
+# Jetson UART for e-stop (if you use it)
+if [[ -e /dev/ttyTHS1 ]]; then
+    DOCKER_ARGS+=("--device=/dev/ttyTHS1:/dev/ttyTHS1")
+fi
+
+# Ensure container user can open /dev/tty*
+DIALOUT_GID=$(getent group dialout | cut -d: -f3)
+if [[ -n "$DIALOUT_GID" ]]; then
+    DOCKER_ARGS+=("--group-add=${DIALOUT_GID}")
+fi
 
 
+# MOUNTS & WORKING DIRECTORY
+DOCKER_ARGS+=("-v" "${HOST_WORKDIR}:${CONTAINER_WORKDIR}")
+DOCKER_ARGS+=("-v" "/etc/localtime:/etc/localtime:ro")
+DOCKER_ARGS+=("--workdir=${CONTAINER_WORKDIR}/isaac_ros-dev")
+DOCKER_ARGS+=("-v" "$SCRIPT_DIR/entrypoint_additions:/usr/local/bin/scripts/entrypoint_additions")
+DOCKER_ARGS+=("-v" "$SCRIPT_DIR/entrypoint.sh:/usr/local/bin/scripts/entrypoint.sh")
+# PERSISTENT BUILD VOLUMES
+DOCKER_ARGS+=("-v" "${CONTAINER_NAME}-build:${CONTAINER_WORKDIR}/isaac_ros-dev/build")
+DOCKER_ARGS+=("-v" "${CONTAINER_NAME}-install:${CONTAINER_WORKDIR}/isaac_ros-dev/install")
+DOCKER_ARGS+=("-v" "${CONTAINER_NAME}-log:${CONTAINER_WORKDIR}/isaac_ros-dev/log")
+# ZED settings/resources
+if [[ -d "$HOME/zed/settings" ]]; then
+    DOCKER_ARGS+=("-v" "$HOME/zed/settings:/usr/local/zed/settings")
+fi
+if [[ -d "$HOME/zed/resources" ]]; then
+    DOCKER_ARGS+=("-v" "$HOME/zed/resources:/usr/local/zed/resources")
+fi
 
+DOCKER_ARGS+=("--entrypoint=$ENTRYPOINT")
 
-
-# GPU
+# GPU env
 DOCKER_ARGS+=("-e NVIDIA_VISIBLE_DEVICES=all")
 DOCKER_ARGS+=("-e NVIDIA_DRIVER_CAPABILITIES=all")
 
-# display forwarding
-DOCKER_ARGS+=("-v /tmp/.X11-unix:/tmp/.X11-unix") # mounts socket
-DOCKER_ARGS+=("-v $HOME/.Xauthority:/home/admin/.Xauthority:rw") # mounts xauth file 
-DOCKER_ARGS+=("-e DISPLAY") # set display env var
+# Ensure container user can open /dev/nvhost* and friends
+VID_GID=$(getent group video  | cut -d: -f3)
+REN_GID=$(getent group render | cut -d: -f3)
+INPUT_GID=$(getent group input | cut -d: -f3)
+if [[ -n "$VID_GID" ]]; then DOCKER_ARGS+=("--group-add=${VID_GID}"); fi
+if [[ -n "$REN_GID" ]]; then DOCKER_ARGS+=("--group-add=${REN_GID}"); fi
+if [[ -n "$INPUT_GID" ]]; then DOCKER_ARGS+=("--group-add=${INPUT_GID}"); fi
 
-# forward SSH agent
-if [[ -n $SSH_AUTH_SOCK ]]; then
-    DOCKER_ARGS+=("-v $SSH_AUTH_SOCK:/ssh-agent")
-    DOCKER_ARGS+=("-e SSH_AUTH_SOCK=/ssh-agent")
-fi
-
-# jetson specific stuff
-if [[ $PLATFORM == "aarch64" ]]; then
-    DOCKER_ARGS+=("-e NVIDIA_VISIBLE_DEVICES=nvidia.com/gpu=all,nvidia.com/pva=all")
-       DOCKER_ARGS+=("-v /usr/bin/tegrastats:/usr/bin/tegrastats")
-    DOCKER_ARGS+=("-v /tmp/:/tmp/")
-       DOCKER_ARGS+=("-v /usr/lib/aarch64-linux-gnu/tegra:/usr/lib/aarch64-linux-gnu/tegra")
-    DOCKER_ARGS+=("-v /usr/src/jetson_multimedia_api:/usr/src/jetson_multimedia_api")
-       DOCKER_ARGS+=("--pid=host")
-    DOCKER_ARGS+=("-v /usr/share/vpi3:/usr/share/vpi3")
-       DOCKER_ARGS+=("-v /dev:/dev")
-
-       if [[ $(getent group jtop) ]]; then
-	       DOCKER_ARGS+=("-v /run/jtop.sock:/run/jtop.sock:ro")
-       fi
-fi
-
-
-# mount dev fs, entrypoint, set working directory
-DOCKER_ARGS+=("-v $WORKDIR:/autonav") # mount workspace 
-DOCKER_ARGS+=("-v /etc/localtime:/etc/localtime:ro") # sync time or something
-DOCKER_ARGS+=("--workdir /autonav/isaac_ros-dev") # mount workspace 
-DOCKER_ARGS+=("-v $SCRIPT_DIR/entrypoint_additions:/usr/local/bin/scripts/entrypoint_additions") # mount entrypoint scripts
-DOCKER_ARGS+=("-v $SCRIPT_DIR/entrypoint.sh:/usr/local/bin/scripts/entrypoint.sh") # mount entrypoint
-DOCKER_ARGS+=("-v $HOME/zed/settings:/usr/local/zed/settings") # mount zed config 
-DOCKER_ARGS+=("-v $HOME/zed/resources:/usr/local/zed/resources") # mount zed config 
-
-#DOCKER_ARGS+=("-e PS1='bowser@koopa-kingdom:\\w # '") # set cool prompt
-DOCKER_ARGS+=("--entrypoint $ENTRYPOINT")
-
-
-
-
-# Re-use existing container.
-if [ "$(docker ps -a --quiet --filter status=running --filter name=$CONTAINER_NAME)" ]; then
-    C_WORKDIR=$(docker exec $CONTAINER_NAME printenv WORKDIR)
-
-    docker exec -i -t -u admin --workdir "/autonav/isaac_ros-dev" $CONTAINER_NAME /bin/bash $@
-
+# RE-USE EXISTING CONTAINER
+if [ "$(docker ps -a --quiet --filter status=running --filter name=^/${CONTAINER_NAME}$)" ]; then
+    echo "Container $CONTAINER_NAME is already running. Attaching..."
+    docker exec -i -t -u ${USERNAME} --workdir "${CONTAINER_WORKDIR}/isaac_ros-dev" $CONTAINER_NAME /bin/bash "$@"
     exit 0
 fi
 
+# Check if container exists but is stopped
+if [ "$(docker ps -a --quiet --filter status=exited --filter name=^/${CONTAINER_NAME}$)" ]; then
+    echo "Container $CONTAINER_NAME exists but is stopped. Starting and attaching..."
+    docker start $CONTAINER_NAME
+    docker exec -i -t -u ${USERNAME} --workdir "${CONTAINER_WORKDIR}/isaac_ros-dev" $CONTAINER_NAME /bin/bash "$@"
+    exit 0
+fi
 
+# CREATE NEW CONTAINER
+echo "Starting new container: $CONTAINER_NAME"
+echo "Mounting: ${HOST_WORKDIR} → ${CONTAINER_WORKDIR}"
 
-docker run -it --rm \
-	--privileged \
-	--network host \
-	--ipc=host \
-	${DOCKER_ARGS[@]} \
-	--name "$CONTAINER_NAME" \
-	--runtime nvidia \
-	$IMAGE_TAG \
-	/bin/bash
-
+docker run -it \
+    --runtime nvidia \
+    --gpus all \
+    --privileged \
+    --ipc host \
+    --device-cgroup-rule='c 13:* rmw' \
+    -e NVIDIA_VISIBLE_DEVICES=all \
+    -e NVIDIA_DRIVER_CAPABILITIES=all \
+    --device=/dev/bus/usb:/dev/bus/usb \
+    "${DOCKER_ARGS[@]}" \
+    --name "$CONTAINER_NAME" \
+    $IMAGE_TAG \
+    /bin/bash

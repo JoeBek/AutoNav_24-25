@@ -1,17 +1,25 @@
 FROM autonav:koopa-kingdom
 
-# deps
-RUN apt-get update && apt-get install -y \
-	gosu	\
-	bluez \
-	bluez-tools \
-	dbus \
-	evtest \
-	joystick \
-	udev \
-	ros-humble-point-cloud-transport \
-	nano
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gosu \
+    bluez \
+    bluez-tools \
+    dbus \
+    evtest \
+    joystick \
+    udev \
+    nano \
+    iproute2 \
+ && rm -rf /var/lib/apt/lists/*
 
-RUN pip install \
-	pyserial
+RUN python3 -m pip install --no-cache-dir pyserial
 
+RUN rm -rf /autonav/isaac_ros-dev/install \
+           /autonav/isaac_ros-dev/build \
+           /autonav/isaac_ros-dev/log
+
+# Create workspace directory
+RUN mkdir -p /workspace
+
+WORKDIR /workspace

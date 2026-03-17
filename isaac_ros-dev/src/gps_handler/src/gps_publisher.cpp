@@ -15,7 +15,7 @@
 using namespace std::chrono_literals;
 
 // GPS Serial Port
-#define SERIAL_PORT "/dev/ttyUSB0"
+#define SERIAL_PORT "/dev/serial/by-id/usb-Prolific_Technology_Inc._USB-Serial_Controller_D-if00-port0"
 // Indices for GPS Data when header is removed from the original serial data string
 #define GPS_SOLUTION_STATUS_INDEX 0
 #define POSITION_TYPE_INDEX 1
