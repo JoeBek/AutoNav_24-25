@@ -1,0 +1,13 @@
+material vrc/course
+{
+	technique
+	{
+		pass
+		{
+			texture_unit
+			{
+				texture straightroad.png
+			}
+		}
+	}
+}

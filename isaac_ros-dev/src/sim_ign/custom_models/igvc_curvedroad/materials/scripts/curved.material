@@ -1,0 +1,13 @@
+material vrc/curved
+{
+	technique
+	{
+		pass
+		{
+			texture_unit
+			{
+				texture curvedroad.png
+			}
+		}
+	}
+}

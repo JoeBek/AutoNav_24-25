@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+    <!-- Classic libgazebo_ros_p3d.so (ground-truth pose) -> Fortress
+         OdometryPublisher system, which emits the true model pose as
+         nav_msgs/Odometry-equivalent on the 'ground_truth/odom' Ignition
+         topic (dimensions=3 for full 3D). Bridge it to ROS if needed. -->
+    <gazebo>
+        <plugin filename="ignition-gazebo-odometry-publisher-system" name="gz::sim::systems::OdometryPublisher">
+            <odom_frame>odom</odom_frame>
+            <robot_base_frame>base_link</robot_base_frame>
+            <odom_topic>ground_truth/odom</odom_topic>
+            <dimensions>3</dimensions>
+            <odom_publish_frequency>30</odom_publish_frequency>
+        </plugin>
+    </gazebo>
+
+</robot>

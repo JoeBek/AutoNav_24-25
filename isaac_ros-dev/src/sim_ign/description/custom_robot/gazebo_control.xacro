@@ -1,0 +1,36 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+    <!-- Differential drive: Classic libgazebo_ros_diff_drive.so ->
+         Fortress DiffDrive system. Note Fortress uses wheel_radius (0.2),
+         not wheel_diameter. cmd_vel/odom/joint_states reach ROS via ros_gz_bridge. -->
+    <gazebo>
+        <plugin filename="ignition-gazebo-diff-drive-system" name="gz::sim::systems::DiffDrive">
+            <!--WHEEL INFORMATION-->
+            <left_joint>left_wheel_joint</left_joint>
+            <right_joint>right_wheel_joint</right_joint>
+            <wheel_separation>0.5372</wheel_separation>
+            <wheel_radius>0.2</wheel_radius>
+
+            <!--LIMITS-->
+            <max_linear_acceleration>10</max_linear_acceleration>
+
+            <!--INPUT-->
+            <topic>cmd_vel</topic>
+
+            <!--OUTPUT-->
+            <odom_topic>odom</odom_topic>
+            <tf_topic>/tf</tf_topic>
+            <frame_id>odom</frame_id>
+            <child_frame_id>base_link</child_frame_id>
+            <odom_publish_frequency>30</odom_publish_frequency>
+        </plugin>
+
+        <!-- Publishes joint positions to the 'joint_states' Ignition topic;
+             bridged to /joint_states for robot_state_publisher. -->
+        <plugin filename="ignition-gazebo-joint-state-publisher-system" name="gz::sim::systems::JointStatePublisher">
+            <topic>joint_states</topic>
+        </plugin>
+    </gazebo>
+
+</robot>

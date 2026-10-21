@@ -1,0 +1,65 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+    <link name="depth_camera_link">
+    <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+        <box size="0.015 0.130 0.022"/>
+        </geometry>
+    </visual>
+
+    <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+        <box size="0.015 0.130 0.022"/>
+        </geometry>
+    </collision>
+
+    <inertial>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <mass value="0.035"/>
+        <inertia ixx="0.001"  ixy="0"  ixz="0" iyy="0.001" iyz="0" izz="0.001" />
+    </inertial>
+    </link>
+
+    <joint name="depth_camera_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="depth_camera_link"/>
+    <origin xyz="0.415 0 0.35" rpy="0 0 0"/>
+    </joint>
+
+    <link name="camera_depth_frame"/>
+
+    <joint name="camera_depth_joint" type="fixed">
+    <origin xyz="0 0 0" rpy="${-pi/2} 0 ${-pi/2}"/>
+    <parent link="depth_camera_link"/>
+    <child link="camera_depth_frame"/>
+    </joint>
+
+    <!-- Classic type="depth" + libgazebo_ros_camera.so -> Fortress depth_camera.
+         With <topic>depth_camera</topic> it publishes depth_camera/depth_image
+         and depth_camera/points; bridged in launch_sim.launch.py. -->
+    <gazebo reference="depth_camera_link">
+    <sensor name="depth_camera" type="depth_camera">
+        <always_on>true</always_on>
+        <visualize>true</visualize>
+        <update_rate>30.0</update_rate>
+        <topic>depth_camera</topic>
+        <gz_frame_id>camera_depth_frame</gz_frame_id>
+        <camera name="camera">
+        <horizontal_fov>1.047198</horizontal_fov>
+        <image>
+            <width>640</width>
+            <height>480</height>
+            <format>B8G8R8</format>
+        </image>
+        <clip>
+            <near>0.05</near>
+            <far>3</far>
+        </clip>
+        </camera>
+    </sensor>
+    </gazebo>
+
+</robot>

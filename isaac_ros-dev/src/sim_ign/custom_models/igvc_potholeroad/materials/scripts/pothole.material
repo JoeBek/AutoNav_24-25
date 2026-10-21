@@ -1,0 +1,13 @@
+material vrc/pothole
+{
+	technique
+	{
+		pass
+		{
+			texture_unit
+			{
+				texture potholeroad.png
+			}
+		}
+	}
+}

@@ -1,0 +1,13 @@
+material vrc/mirrorbended
+{
+	technique
+	{
+		pass
+		{
+			texture_unit
+			{
+				texture mirrorbendedroad.png
+			}
+		}
+	}
+}

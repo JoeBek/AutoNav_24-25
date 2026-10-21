@@ -1,0 +1,13 @@
+material vrc/bended
+{
+	technique
+	{
+		pass
+		{
+			texture_unit
+			{
+				texture bendedroad.png
+			}
+		}
+	}
+}
